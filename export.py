@@ -11,7 +11,10 @@ import os
 import os.path
 import shutil
 import sqlite3
-import tqdm
+try:
+    from tqdm import tqdm
+except ImportError:
+    tqdm = lambda x: x
 
 
 APPLE_EPOCH = datetime(2001, 1, 1)
