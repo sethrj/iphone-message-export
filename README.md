@@ -2,7 +2,9 @@
 
 This is a hackish tool to export Messages and attachments from an unencrypted
 iPhone backup. I've only tested it on my backup (which contains messages that
-date back to 2010ish) with iOS 14.7 on macOS 11.5.
+date back to 2010ish) with
+- iOS 14.7 on macOS 11.5
+- iOS 15.5 on macOS 11.6
 
 This is meant as a starting point for other people who want to hack around
 with their backups and *not* as a finished product of any kind, although it
@@ -20,3 +22,9 @@ JSON messages file. Attachments are copied from the decrypted backup to a
 subdirectory inside each chat.
 
 This requires at least Python 3.6, and probably 3.7.
+
+Usage:
+```console
+$ python3 export.py "~/Library/Application Support/MobileSync/Backup/...."
+"~/Desktop/iphone-export"
+```
