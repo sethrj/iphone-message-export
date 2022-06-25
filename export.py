@@ -221,6 +221,10 @@ class Messages(ConnectedDatabase):
                                    'orig': att.path})
                 msg['value'] = newval
             result.append(msg)
+        if not result:
+            # Old recipient with no new chats
+            # print(f"No messages found for chat {chat.identifier}")
+            return
         guid = chat.guid.replace(';', '')
         dst_path.mkdir(exist_ok=True)
         with open(dst_path / f'messages-{guid}.json', 'w') as f:
