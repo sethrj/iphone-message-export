@@ -5,6 +5,7 @@ iPhone backup. I've only tested it on my backup (which contains messages that
 date back to 2010ish) with
 - iOS 14.7 on macOS 11.5
 - iOS 15.5 on macOS 11.6
+- iOS 18.4 on macOS 15.4
 
 This is meant as a starting point for other people who want to hack around
 with their backups and *not* as a finished product of any kind, although it

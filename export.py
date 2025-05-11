@@ -1,6 +1,5 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-# Copyright 2021 Seth Johnson
+#!/usr/bin/env python
+# Copyright 2021-2025 Seth Johnson
 # See the top-level LICENSE file for details.
 # SPDX-License-Identifier: Apache-2.0
 from datetime import timedelta, datetime
@@ -18,10 +17,9 @@ except ImportError:
 
 
 APPLE_EPOCH = datetime(2001, 1, 1)
-NATIVE_EPOCH = datetime.utcfromtimestamp(0)
+NATIVE_EPOCH = datetime(1970, 1, 1)
 EPOCH_DELTA = APPLE_EPOCH - NATIVE_EPOCH
 NS_TO_SECONDS = 1000000000
-
 
 def apple_to_dt(created_date):
     return APPLE_EPOCH + timedelta(seconds=created_date)
@@ -93,7 +91,7 @@ class Manifest(ConnectedDatabase):
 
 
 class Messages(ConnectedDatabase):
-    def __init__(self, manifest):
+    def __init__(self, manifest, min_date=None, max_date=None):
         """Initialize from a manifest object to load the SMS database.
         """
         filename = manifest.get_path('Library/SMS/sms.db')
@@ -106,6 +104,22 @@ class Messages(ConnectedDatabase):
 
         # Retain the method for getting filenames
         self.get_backup_filename = manifest.get_path
+
+        if min_date is not None:
+            min_date = dt_to_apple(min_date) * NS_TO_SECONDS
+        if max_date is not None:
+            max_date = dt_to_apple(max_date) * NS_TO_SECONDS
+
+        date_restrict = ""
+        if min_date and max_date:
+            date_restrict = f"AND m.date BETWEEN {min_date} AND {max_date}"
+        elif min_date:
+            date_restrict = f"AND m.date >= {min_date}"
+        elif max_date:
+            date_restrict = f"AND m.date < {max_date}"
+
+        self.date_restrict = date_restrict
+
 
     def get_enumerated_chat_names(self):
         """Return chat ID and phone numbers for each chat (may be duplicates).
@@ -129,26 +143,19 @@ class Messages(ConnectedDatabase):
         )
         attachments = defaultdict(list)
         for (mid, path, uti, name, date) in rows:
+            if path is None:
+                print(f"Missing filename for attachment {mid}")
+                continue
             path = trim_filename(path)
             if name is None:
                 name = os.path.basename(path)
             attachments[mid].append(Attachment(path, uti, name, date))
         return attachments
 
-    def get_messages(self, chat_id, *, min_date=None, max_date=None):
+    def get_messages(self, chat_id):
         """Return all IDs, handles, date stamps, and text from a given chat ID.
         """
         attachments = self.get_attachments(chat_id)
-
-        date_restrict = ""
-        min_date = dt_to_apple(min_date) * NS_TO_SECONDS if min_date else None
-        max_date = dt_to_apple(max_date) * NS_TO_SECONDS if max_date else None
-        if min_date and max_date:
-            date_restrict = f"AND m.date BETWEEN {min_date} AND {max_date}"
-        elif min_date:
-            date_restrict = f"AND m.date >= {min_date}"
-        elif max_date:
-            date_restrict = f"AND m.date < {max_date}"
 
         rows = self.execute(
             "SELECT ROWID, date, handle_id, account, is_from_me, "
@@ -157,7 +164,7 @@ class Messages(ConnectedDatabase):
             "LEFT JOIN chat_message_join cmj "
             "ON m.ROWID = cmj.message_id "
             "WHERE cmj.chat_id = ? "
-            + date_restrict,
+            + self.date_restrict,
             (chat_id,)
         )
 
@@ -230,19 +237,37 @@ class Messages(ConnectedDatabase):
         with open(dst_path / f'messages-{guid}.json', 'w') as f:
             json.dump(result, f, indent=1)
 
-def main(source, destination):
+def main():
     """Load a manifest from your backup directory (should look like
     file:`~/Library/Application Support/MobileSync/Backup/{uid}/`) and export
     to the given destination directory
     """
-    destination = Path(destination)
-    destination.mkdir()
-    manifest = Manifest(Path(source))
-    msg = Messages(manifest)
+    import argparse
+    from datetime import datetime
+
+    parser = argparse.ArgumentParser(description='Export iPhone messages from a backup.')
+    parser.add_argument('source', help='Source backup directory')
+    parser.add_argument('destination', help='Destination directory for exported messages')
+    parser.add_argument('--min-date', help='Only export messages after this date (YYYY-MM-DD)')
+    parser.add_argument('--max-date', help='Only export messages before this date (YYYY-MM-DD)')
+    args = parser.parse_args()
+
+    # Parse date arguments if provided
+    min_date = None
+    max_date = None
+    if args.min_date:
+        min_date = datetime.strptime(args.min_date, '%Y-%m-%d')
+    if args.max_date:
+        max_date = datetime.strptime(args.max_date, '%Y-%m-%d')
+
+    destination = Path(args.destination)
+    destination.mkdir(exist_ok=True)
+    
+    manifest = Manifest(Path(args.source))
+    msg = Messages(manifest, min_date=min_date, max_date=max_date)
     chats = list(msg.get_enumerated_chat_names())
     for c in tqdm(chats):
         msg.export_chat(c, destination)
 
 if __name__ == '__main__':
-    import sys
-    main(*sys.argv[1:])
+    main()
